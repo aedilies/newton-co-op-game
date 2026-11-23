@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git: как перестать терять версии</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0B0B0C;
+      --ink: #F3F2EE;
+      --muted: #8E8D88;
+      --line: #242428;
+      --line-strong: #3A3A40;
+      --accent: #F25C2A;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, 'Inter', sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    .deck {
+      position: relative;
+      width: 100vw;
+      height: 100dvh;
+      background-color: var(--bg);
+      display: grid;
+      grid-template-rows: 1fr auto;
+      padding: 0 clamp(1.5rem, 6vw, 5rem);
+    }
+
+    .rail-bottom {
+      position: relative;
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 1.5rem;
+      font-size: 1.1rem;
+      color: var(--muted);
+      padding: clamp(0.85rem, 2vh, 1.35rem) 0 clamp(1.1rem, 2.8vh, 2rem);
+      border-top: 1px solid var(--line);
+      user-select: none;
+    }
+
+    .progress-rule {
+      position: absolute;
+      top: -1px;
+      left: 0;
+      height: 1px;
+      width: 9.09%;
+      background-color: var(--accent);
+      transition: width 280ms ease;
+    }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      min-height: 0;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      padding: clamp(1.5rem, 4vh, 3rem) 0;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 280ms ease, visibility 280ms ease;
+      pointer-events: none;
+    }
+
+    .slide.is-active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .slide-inner {
+      width: 100%;
+    }
+
+    .split-layout {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      align-items: center;
+      gap: clamp(1.75rem, 4vw, 3.75rem);
+    }
+
+    .photo-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .photo-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      mix-blend-mode: lighten;
+      display: block;
+    }
+
+    h1, h2 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      font-weight: 600;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      color: var(--ink);
+      text-wrap: balance;
+      margin-bottom: clamp(1.75rem, 4.5vh, 3rem);
+    }
+
+    .split-layout h1,
+    .split-layout h2 {
+      font-size: clamp(2rem, 4.5vw, 3.75rem);
+      margin-bottom: clamp(1.5rem, 4vh, 2.5rem);
+    }
+
+    .title-rule {
+      width: 4rem;
+      height: 1px;
+      background-color: var(--accent);
+      margin-bottom: clamp(1.25rem, 3vh, 1.75rem);
+    }
+
+    .subtitle {
+      font-size: clamp(1.2rem, 2.1vw, 1.6rem);
+      font-weight: 400;
+      color: #C8C6C0;
+      line-height: 1.45;
+      letter-spacing: -0.01em;
+    }
+
+    .lead-lines {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(0.85rem, 2vh, 1.35rem);
+      max-width: 56ch;
+    }
+
+    .lead-lines p {
+      font-size: clamp(1.2rem, 2.2vw, 1.6rem);
+      line-height: 1.5;
+      color: var(--ink);
+    }
+
+    .accent {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .file-list {
+      display: flex;
+      flex-direction: column;
+      max-width: 38rem;
+      border-top: 1px solid var(--line);
+      margin-bottom: clamp(1.75rem, 4.5vh, 3rem);
+    }
+
+    .file-item {
+      display: grid;
+      grid-template-columns: 3.5rem 1fr;
+      gap: 1rem;
+      align-items: baseline;
+      font-size: clamp(1.15rem, 2vw, 1.5rem);
+      padding: 0.9rem 0;
+      border-bottom: 1px solid var(--line);
+      letter-spacing: -0.01em;
+    }
+
+    .idx {
+      font-size: 1.1rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+    }
+
+    .question {
+      font-size: clamp(1.3rem, 2.4vw, 1.85rem);
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .snapshot-diagram {
+      margin-top: clamp(2rem, 5vh, 3.25rem);
+      max-width: 680px;
+    }
+
+    .snapshot-diagram svg,
+    .branch-diagram svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      overflow: visible;
+    }
+
+    .zones {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: clamp(0.75rem, 2vw, 1.5rem);
+      margin-top: 0.5rem;
+    }
+
+    .zone-box {
+      flex: 1 1 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 2px;
+      padding: clamp(1.25rem, 3vw, 2.15rem) clamp(1rem, 2vw, 1.5rem);
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      min-width: 0;
+    }
+
+    .zone-step {
+      font-size: 1.1rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+
+    .zone-title {
+      font-size: clamp(1.15rem, 2vw, 1.5rem);
+      font-weight: 500;
+      color: var(--ink);
+    }
+
+    .zone-meta {
+      font-size: clamp(1.1rem, 1.6vw, 1.25rem);
+      color: var(--muted);
+    }
+
+    .arrow-h {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .zones-summary {
+      margin-top: clamp(1.75rem, 4vh, 2.5rem);
+      font-size: clamp(1.15rem, 1.9vw, 1.45rem);
+      color: var(--muted);
+    }
+
+    .cycle {
+      display: flex;
+      align-items: flex-end;
+      gap: clamp(1rem, 2.5vw, 2rem);
+      margin-top: 1rem;
+      padding-top: 1.25rem;
+      padding-bottom: 1.25rem;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .cycle-step {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .cycle-word {
+      font-size: clamp(1.1rem, 1.5vw, 1.2rem);
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .cycle-cmd {
+      font-size: clamp(1.15rem, 1.9vw, 1.5rem);
+      font-weight: 500;
+      color: var(--ink);
+      white-space: nowrap;
+      line-height: 1.2;
+    }
+
+    .cycle-arrow {
+      display: flex;
+      align-items: center;
+      height: 1.8rem;
+      user-select: none;
+    }
+
+    .commit-formula {
+      font-size: clamp(1.25rem, 2.3vw, 1.7rem);
+      font-weight: 500;
+      margin-bottom: clamp(2rem, 5vh, 3rem);
+    }
+
+    .commit-examples {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--line);
+      max-width: 46rem;
+    }
+
+    .commit-row {
+      display: grid;
+      grid-template-columns: 11rem 1fr;
+      gap: 1rem;
+      align-items: baseline;
+      padding: 1.15rem 0;
+      border-bottom: 1px solid var(--line);
+      font-size: clamp(1.15rem, 1.9vw, 1.45rem);
+    }
+
+    .branch-diagram {
+      margin-top: clamp(1.75rem, 4vh, 2.75rem);
+      width: 100%;
+      max-width: 780px;
+    }
+
+    .stack-rows {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--line);
+    }
+
+    .stack-row {
+      padding: clamp(1rem, 2.2vh, 1.5rem) 0;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .stack-title {
+      font-size: clamp(1.2rem, 2vw, 1.5rem);
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .stack-text {
+      font-size: clamp(1.15rem, 1.9vw, 1.4rem);
+      line-height: 1.45;
+      color: var(--ink);
+    }
+
+    .why-row {
+      display: grid;
+      grid-template-columns: 3.25rem 1fr;
+      gap: 0.75rem;
+      align-items: baseline;
+      padding: clamp(0.9rem, 2vh, 1.25rem) 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .why-title {
+      font-size: clamp(1.15rem, 1.9vw, 1.45rem);
+      font-weight: 500;
+      color: var(--ink);
+    }
+
+    .why-desc {
+      font-size: clamp(1.1rem, 1.6vw, 1.25rem);
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+
+    .demo-list {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--line);
+      max-width: 54rem;
+    }
+
+    .demo-row {
+      display: grid;
+      grid-template-columns: 3.25rem minmax(14rem, 18rem) 1fr;
+      gap: 1.25rem;
+      align-items: baseline;
+      padding: clamp(0.7rem, 1.5vh, 1rem) 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .demo-cmd {
+      font-size: clamp(1.15rem, 1.8vw, 1.45rem);
+      font-weight: 500;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .demo-desc {
+      font-size: clamp(1.1rem, 1.7vw, 1.35rem);
+      color: var(--ink);
+    }
+
+    .summary-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--line);
+      max-width: 48rem;
+    }
+
+    .summary-list li {
+      display: grid;
+      grid-template-columns: 3.5rem 1fr;
+      gap: 1rem;
+      align-items: baseline;
+      font-size: clamp(1.2rem, 2.1vw, 1.6rem);
+      line-height: 1.45;
+      padding: clamp(0.9rem, 2vh, 1.35rem) 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .slide-number {
+      font-size: 1.1rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      letter-spacing: 0.02em;
+    }
+
+    @media (max-width: 860px) {
+      .split-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .photo-frame {
+        max-height: 26vh;
+      }
+
+      .zones {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .arrow-h {
+        transform: rotate(90deg);
+        padding: 0.25rem 0;
+      }
+
+      .cycle {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        border-top: none;
+        border-bottom: none;
+        padding: 0;
+      }
+
+      .cycle-arrow {
+        height: auto;
+        transform: rotate(90deg);
+        padding: 0.15rem 0;
+      }
+
+      .commit-row,
+      .demo-row {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide,
+      .progress-rule {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="Презентация: Git — как перестать терять версии">
+    <div class="stage">
+      <section class="slide is-active" aria-hidden="false">
+        <div class="slide-inner split-layout">
+          <div>
+            <h1>Git: как перестать терять версии</h1>
+            <div class="title-rule"></div>
+            <p class="subtitle">Дисциплина «Введение в ИВТ» <span class="accent">·</span> 1 курс</p>
+          </div>
+          <div class="photo-frame">
+            <img src="A:\magic\git_-как-перестать-терять-версии\public\images\minimal_title.png" alt="Минималистичная графика: папки версий" referrerpolicy="no-referrer">
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Знакомая папка?</h2>
+          <div class="file-list">
+            <div class="file-item"><span class="idx">01</span><span>курсовая_финал.docx</span></div>
+            <div class="file-item"><span class="idx">02</span><span>курсовая_финал_2.docx</span></div>
+            <div class="file-item"><span class="idx">03</span><span>курсовая_ТОЧНО_ФИНАЛ.docx</span></div>
+          </div>
+          <p class="question">Какой сдавать?</p>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Что такое Git</h2>
+          <div class="lead-lines">
+            <p>Git — это <span class="accent">машина времени</span> для папки с проектом.</p>
+            <p>Он запоминает <span class="accent">снимки</span> состояния, а не «разницу» между файлами.</p>
+          </div>
+          <div class="snapshot-diagram">
+            <svg viewBox="0 0 680 96" fill="none" role="img" aria-label="Шкала снимков состояния во времени">
+              <line x1="20" y1="36" x2="650" y2="36" stroke="#3A3A40" stroke-width="1" />
+              <polyline points="642,31 651,36 642,41" stroke="#F25C2A" stroke-width="1" fill="none" />
+              <circle cx="90" cy="36" r="6" fill="#0B0B0C" stroke="#F3F2EE" stroke-width="1" />
+              <circle cx="240" cy="36" r="6" fill="#0B0B0C" stroke="#F3F2EE" stroke-width="1" />
+              <circle cx="390" cy="36" r="6" fill="#0B0B0C" stroke="#F3F2EE" stroke-width="1" />
+              <circle cx="540" cy="36" r="7" fill="#0B0B0C" stroke="#F25C2A" stroke-width="1" />
+              <text x="64" y="74" fill="#8E8D88" font-size="18" font-family="system-ui, -apple-system, 'Inter', sans-serif">снимок 1</text>
+              <text x="214" y="74" fill="#8E8D88" font-size="18" font-family="system-ui, -apple-system, 'Inter', sans-serif">снимок 2</text>
+              <text x="364" y="74" fill="#8E8D88" font-size="18" font-family="system-ui, -apple-system, 'Inter', sans-serif">снимок 3</text>
+              <text x="514" y="74" fill="#F25C2A" font-size="18" font-family="system-ui, -apple-system, 'Inter', sans-serif">сейчас</text>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Три зоны</h2>
+          <div class="zones">
+            <div class="zone-box">
+              <div class="zone-step">01</div>
+              <div class="zone-title">Рабочая зона</div>
+              <div class="zone-meta">стол</div>
+            </div>
+            <div class="arrow-h" aria-hidden="true">
+              <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
+                <line x1="0" y1="8" x2="37" y2="8" stroke="#F25C2A" stroke-width="1" />
+                <polyline points="31,3 38,8 31,13" stroke="#F25C2A" stroke-width="1" fill="none" />
+              </svg>
+            </div>
+            <div class="zone-box">
+              <div class="zone-step">02</div>
+              <div class="zone-title">Staging</div>
+              <div class="zone-meta">коробка</div>
+            </div>
+            <div class="arrow-h" aria-hidden="true">
+              <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
+                <line x1="0" y1="8" x2="37" y2="8" stroke="#F25C2A" stroke-width="1" />
+                <polyline points="31,3 38,8 31,13" stroke="#F25C2A" stroke-width="1" fill="none" />
+              </svg>
+            </div>
+            <div class="zone-box">
+              <div class="zone-step">03</div>
+              <div class="zone-title">Репозиторий</div>
+              <div class="zone-meta">склад</div>
+            </div>
+          </div>
+          <p class="zones-summary">стол <span class="accent">→</span> коробка <span class="accent">→</span> склад</p>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Основной цикл</h2>
+          <div class="cycle">
+            <div class="cycle-step">
+              <span class="cycle-word">проверь</span>
+              <span class="cycle-cmd">git status</span>
+            </div>
+            <div class="cycle-arrow" aria-hidden="true">
+              <svg width="28" height="14" viewBox="0 0 28 14" fill="none">
+                <line x1="0" y1="7" x2="25" y2="7" stroke="#F25C2A" stroke-width="1" />
+                <polyline points="20,2 26,7 20,12" stroke="#F25C2A" stroke-width="1" fill="none" />
+              </svg>
+            </div>
+            <div class="cycle-step">
+              <span class="cycle-word">подготовь</span>
+              <span class="cycle-cmd">git add</span>
+            </div>
+            <div class="cycle-arrow" aria-hidden="true">
+              <svg width="28" height="14" viewBox="0 0 28 14" fill="none">
+                <line x1="0" y1="7" x2="25" y2="7" stroke="#F25C2A" stroke-width="1" />
+                <polyline points="20,2 26,7 20,12" stroke="#F25C2A" stroke-width="1" fill="none" />
+              </svg>
+            </div>
+            <div class="cycle-step">
+              <span class="cycle-word">сохрани</span>
+              <span class="cycle-cmd">git commit -m "..."</span>
+            </div>
+            <div class="cycle-arrow" aria-hidden="true">
+              <svg width="28" height="14" viewBox="0 0 28 14" fill="none">
+                <line x1="0" y1="7" x2="25" y2="7" stroke="#F25C2A" stroke-width="1" />
+                <polyline points="20,2 26,7 20,12" stroke="#F25C2A" stroke-width="1" fill="none" />
+              </svg>
+            </div>
+            <div class="cycle-step">
+              <span class="cycle-word">отправь</span>
+              <span class="cycle-cmd">git push</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Коммит</h2>
+          <p class="commit-formula">
+            Коммит = <span class="accent">снимок</span> + сообщение + автор + время
+          </p>
+          <div class="commit-examples">
+            <div class="commit-row">
+              <span class="muted">Плохо</span>
+              <span class="muted">«fix»</span>
+            </div>
+            <div class="commit-row">
+              <span class="accent">Хорошо</span>
+              <span>«добавил вывод массива в консоль»</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Ветки и слияние</h2>
+          <div class="lead-lines">
+            <p><span class="accent">Ветка</span> — параллельная версия проекта.</p>
+            <p><span class="accent">Слияние</span> возвращает изменения в основную ветку.</p>
+          </div>
+          <div class="branch-diagram">
+            <svg viewBox="0 0 760 210" fill="none" role="img" aria-label="Схема ветки и слияния в main">
+              <text x="8" y="67" fill="#F3F2EE" font-size="22" font-family="system-ui, -apple-system, 'Inter', sans-serif">main</text>
+              <line x1="88" y1="60" x2="720" y2="60" stroke="#F3F2EE" stroke-width="1" />
+              <polyline points="712,55 721,60 712,65" stroke="#F25C2A" stroke-width="1" fill="none" />
+
+              <path d="M 224 64 C 260 110, 270 148, 315 148 L 485 148 C 530 148, 545 105, 575 65" stroke="#F25C2A" stroke-width="1" fill="none" />
+              <polyline points="564,69 575,65 574,76" stroke="#F25C2A" stroke-width="1" fill="none" />
+
+              <circle cx="130" cy="60" r="6" fill="#0B0B0C" stroke="#F3F2EE" stroke-width="1" />
+              <circle cx="220" cy="60" r="6" fill="#0B0B0C" stroke="#F3F2EE" stroke-width="1" />
+              <circle cx="400" cy="60" r="6" fill="#0B0B0C" stroke="#F3F2EE" stroke-width="1" />
+              <circle cx="580" cy="60" r="6" fill="#0B0B0C" stroke="#F25C2A" stroke-width="1" />
+              <circle cx="670" cy="60" r="6" fill="#0B0B0C" stroke="#F3F2EE" stroke-width="1" />
+
+              <circle cx="345" cy="148" r="6" fill="#0B0B0C" stroke="#F25C2A" stroke-width="1" />
+              <circle cx="455" cy="148" r="6" fill="#0B0B0C" stroke="#F25C2A" stroke-width="1" />
+
+              <text x="372" y="190" fill="#F25C2A" font-size="22" font-family="system-ui, -apple-system, 'Inter', sans-serif">ветка</text>
+              <text x="554" y="34" fill="#F25C2A" font-size="22" font-family="system-ui, -apple-system, 'Inter', sans-serif">merge</text>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner split-layout">
+          <div>
+            <h2>Git <span class="accent">≠</span> GitHub</h2>
+            <div class="stack-rows">
+              <div class="stack-row">
+                <div class="stack-title">Git</div>
+                <p class="stack-text">Программа-дневник на вашем компьютере.</p>
+              </div>
+              <div class="stack-row">
+                <div class="stack-title">GitHub / GitLab</div>
+                <p class="stack-text">Сайт, где дневник лежит в облаке.</p>
+              </div>
+            </div>
+          </div>
+          <div class="photo-frame">
+            <img src="A:\magic\git_-как-перестать-терять-версии\public\images\minimal_cloud.png" alt="Минималистичная графика: локальный узел и облачная сеть" referrerpolicy="no-referrer">
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Мини-демо</h2>
+          <div class="demo-list">
+            <div class="demo-row">
+              <span class="idx">01</span>
+              <span class="demo-cmd">git init</span>
+              <span class="demo-desc">создаёт репозиторий в папке проекта</span>
+            </div>
+            <div class="demo-row">
+              <span class="idx">02</span>
+              <span class="demo-cmd">git status</span>
+              <span class="demo-desc">показывает, какие файлы изменились</span>
+            </div>
+            <div class="demo-row">
+              <span class="idx">03</span>
+              <span class="demo-cmd">git add .</span>
+              <span class="demo-desc">отправляет изменения в Staging</span>
+            </div>
+            <div class="demo-row">
+              <span class="idx">04</span>
+              <span class="demo-cmd">git commit -m "..."</span>
+              <span class="demo-desc">сохраняет снимок состояния с описанием</span>
+            </div>
+            <div class="demo-row">
+              <span class="idx">05</span>
+              <span class="demo-cmd">git log --oneline</span>
+              <span class="demo-desc">показывает историю коммитов списком</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner split-layout">
+          <div>
+            <h2>Зачем это уже сейчас</h2>
+            <div class="stack-rows">
+              <div class="why-row">
+                <span class="idx">01</span>
+                <div>
+                  <div class="why-title">Лабы</div>
+                  <p class="why-desc">Откат назад, если программа перестала запускаться</p>
+                </div>
+              </div>
+              <div class="why-row">
+                <span class="idx">02</span>
+                <div>
+                  <div class="why-title">Курсовые</div>
+                  <p class="why-desc">Одна папка и полная история правок</p>
+                </div>
+              </div>
+              <div class="why-row">
+                <span class="idx">03</span>
+                <div>
+                  <div class="why-title">Командные проекты</div>
+                  <p class="why-desc">Работа без пересылки архивов</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="photo-frame">
+            <img src="A:\magic\git_-как-перестать-терять-версии\public\images\minimal_work.png" alt="Минималистичная графика: три параллельных трека с контрольными точками" referrerpolicy="no-referrer">
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" aria-hidden="true">
+        <div class="slide-inner">
+          <h2>Итог</h2>
+          <ul class="summary-list">
+            <li><span class="idx">01</span><span>Git = <span class="accent">снимки</span></span></li>
+            <li><span class="idx">02</span><span>Цикл <span class="accent">status → add → commit → push</span></span></li>
+            <li><span class="idx">03</span><span>Ветки — это <span class="accent">безопасно</span></span></li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <footer class="rail-bottom">
+      <div class="progress-rule" id="progress-rule"></div>
+      <span class="slide-number" id="slide-number" aria-live="polite">01 / 11</span>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+      var counter = document.getElementById('slide-number');
+      var progress = document.getElementById('progress-rule');
+      var current = 0;
+
+      function pad(n) {
+        return n < 10 ? '0' + n : String(n);
+      }
+
+      function render(index) {
+        if (index < 0 || index >= slides.length) return;
+        current = index;
+        slides.forEach(function (slide, i) {
+          var active = i === current;
+          slide.classList.toggle('is-active', active);
+          slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
+        counter.textContent = pad(current + 1) + ' / ' + pad(slides.length);
+        progress.style.width = ((current + 1) / slides.length) * 100 + '%';
+      }
+
+      window.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          render(current + 1);
+        } else if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          render(current - 1);
+        }
+      });
+
+      render(0);
+    })();
+  </script>
+</body>
+</html>

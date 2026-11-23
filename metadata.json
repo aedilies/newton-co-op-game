@@ -1,0 +1,6 @@
+{
+  "name": "Git: как перестать терять версии",
+  "description": "Автономная минималистичная презентация по дисциплине «Введение в ИВТ» для 1 курса.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
